@@ -124,6 +124,15 @@ class SettingsPlayerFragment : BaseSettingsFragment() {
                     addPreference(this)
                 }
 
+                MaterialSliderPreference(context, 0, 10, 1, true).apply {
+                    key = "crossfade_duration"
+                    title = getString(R.string.crossfade_duration)
+                    summary = getString(R.string.crossfade_duration_summary)
+                    isIconSpaceReserved = false
+                    setDefaultValue(0)
+                    addPreference(this)
+                }
+
                 SwitchPreferenceCompat(context).apply {
                     key = MORE_BRAIN_CAPACITY
                     title = getString(R.string.more_brain_capacity)

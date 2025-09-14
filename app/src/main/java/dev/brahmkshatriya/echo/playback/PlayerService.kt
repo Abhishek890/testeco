@@ -9,7 +9,6 @@ import android.content.SharedPreferences
 import androidx.annotation.OptIn
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
-import androidx.media3.common.MediaItem
 import androidx.media3.common.TrackSelectionParameters
 import androidx.media3.common.TrackSelectionParameters.AudioOffloadPreferences.AUDIO_OFFLOAD_MODE_DISABLED
 import androidx.media3.common.TrackSelectionParameters.AudioOffloadPreferences.AUDIO_OFFLOAD_MODE_ENABLED
@@ -45,8 +44,6 @@ import dev.brahmkshatriya.echo.utils.ContextUtils.listenFuture
 import kotlinx.coroutines.CoroutineName
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.MutableSharedFlow
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.plus
 import org.koin.android.ext.android.inject
 import java.io.File
@@ -55,7 +52,6 @@ class PlayerService : MediaLibraryService() {
 
     private val extensionLoader by inject<ExtensionLoader>()
     private val extensions by lazy { extensionLoader }
-    private val exoPlayer by lazy { createExoplayer() }
 
     private var mediaSession: MediaLibrarySession? = null
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo) = mediaSession
@@ -65,17 +61,8 @@ class PlayerService : MediaLibraryService() {
     private val scope = CoroutineScope(Dispatchers.IO) + CoroutineName("PlayerService")
 
     @OptIn(UnstableApi::class)
-    private val listener = SharedPreferences.OnSharedPreferenceChangeListener { prefs, key ->
-        when (key) {
-            SKIP_SILENCE -> exoPlayer.skipSilenceEnabled = prefs.getBoolean(key, true)
-            MORE_BRAIN_CAPACITY -> exoPlayer.trackSelectionParameters =
-                exoPlayer.trackSelectionParameters
-                    .buildUpon()
-                    .setAudioOffloadPreferences(offloadPreferences(prefs.getBoolean(key, false)))
-                    .build()
-        }
-    }
-    private val effects by lazy { EffectsListener(exoPlayer, this, state.session) }
+    private lateinit var listener: SharedPreferences.OnSharedPreferenceChangeListener
+    private lateinit var effects: EffectsListener
 
     private val downloader by inject<Downloader>()
     private val downloadFlow by lazy { downloader.flow }
@@ -85,10 +72,26 @@ class PlayerService : MediaLibraryService() {
         super.onCreate()
         setListener(MediaSessionServiceListener(this, getPendingIntent(this)))
 
-        val player = ShufflePlayer(exoPlayer)
+        val player = CrossfadePlayer(scope) { createExoPlayer() }
+        player.crossfadeDuration = app.settings.getInt(CROSSFADE_DURATION, 0)
         scope.launch(Dispatchers.Main) {
             mediaChangeFlow.collect { (o, n) -> player.onMediaItemChanged(o, n) }
         }
+
+        listener = SharedPreferences.OnSharedPreferenceChangeListener { prefs, key ->
+            val forwardTo = player.forwardTo as ExoPlayer
+            when (key) {
+                SKIP_SILENCE -> forwardTo.skipSilenceEnabled = prefs.getBoolean(key, true)
+                MORE_BRAIN_CAPACITY -> forwardTo.trackSelectionParameters =
+                    forwardTo.trackSelectionParameters
+                        .buildUpon()
+                        .setAudioOffloadPreferences(offloadPreferences(prefs.getBoolean(key, false)))
+                        .build()
+                CROSSFADE_DURATION -> player.crossfadeDuration = prefs.getInt(key, 0)
+            }
+        }
+        effects = EffectsListener(player.forwardTo as ExoPlayer, this, state.session)
+
 
         val callback = PlayerCallback(
             app, scope, app.throwFlow, extensions, state.radio, downloadFlow
@@ -146,7 +149,7 @@ class PlayerService : MediaLibraryService() {
             .build()
 
     @OptIn(UnstableApi::class)
-    private fun createExoplayer() = run {
+    private fun createExoPlayer(): ExoPlayer {
         val audioAttributes = AudioAttributes.Builder()
             .setUsage(C.USAGE_MEDIA)
             .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
@@ -159,7 +162,7 @@ class PlayerService : MediaLibraryService() {
             app, scope, state, extensions, cache, downloadFlow, mediaChangeFlow
         )
 
-        ExoPlayer.Builder(this, factory)
+        return ExoPlayer.Builder(this, factory)
             .setRenderersFactory(RenderersFactory(this))
             .setHandleAudioBecomingNoisy(true)
             .setWakeMode(C.WAKE_MODE_NETWORK)
@@ -186,6 +189,7 @@ class PlayerService : MediaLibraryService() {
         const val MORE_BRAIN_CAPACITY = "offload"
         const val CLOSE_PLAYER = "close_player"
         const val SKIP_SILENCE = "skip_silence"
+        const val CROSSFADE_DURATION = "crossfade_duration"
 
         const val CACHE_SIZE = "cache_size"
 

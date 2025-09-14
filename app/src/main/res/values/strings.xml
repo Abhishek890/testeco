@@ -130,6 +130,9 @@
     <string name="cache_size">Cache Size</string>
     <string name="cache_size_summary">Size in MB to cache audio and video</string>
 
+    <string name="crossfade_duration">Crossfade</string>
+    <string name="crossfade_duration_summary">Crossfade between tracks by a set amount of seconds</string>
+
     <string name="version">Version</string>
     <string name="select_language">Select Language</string>
     <string name="system">System</string>

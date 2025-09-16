@@ -36,7 +36,7 @@ jobs:
           ./gradlew assembleNightly \
           -Pandroid.injected.signing.store.file=$GITHUB_WORKSPACE/signing-key.jks \
           -Pandroid.injected.signing.store.password=${{ secrets.PASSWORD }} \
-          -Pandroid.injected.signing.key.alias=key0 \
+          -Pandroid.injected.signing.key.alias=abhikey0 \
           -Pandroid.injected.signing.key.password=${{ secrets.PASSWORD }}
           cp app/build/outputs/apk/nightly/app-nightly.apk app/build/${{ env.VERSION }}.apk
 
